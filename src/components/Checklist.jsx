@@ -6,11 +6,30 @@ function Node({ node, path, onAdd, onUpdate, onDelete }) {
   const isFolder = node.kind === 'folder'
   const [open, setOpen] = useState(true)
   const [editing, setEditing] = useState(false)
-  const [title, setTitle] = useState(node.title)
+  const [title, setTitle] = useState(node.title || '')
+
+  useEffect(() => {
+    // Keep local title in sync when node changes from server
+    setTitle(node.title || '')
+  }, [node.title])
 
   const save = async () => {
-    await onUpdate(path, { title })
+    const next = title?.trim() ?? ''
+    if (next !== (node.title || '')) {
+      await onUpdate(path, { title: next })
+    }
     setEditing(false)
+  }
+
+  const onKeyDown = async (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault()
+      await save()
+    } else if (e.key === 'Escape') {
+      e.preventDefault()
+      setTitle(node.title || '')
+      setEditing(false)
+    }
   }
 
   return (
@@ -25,10 +44,11 @@ function Node({ node, path, onAdd, onUpdate, onDelete }) {
             value={title}
             onChange={(e)=>setTitle(e.target.value)}
             onBlur={save}
+            onKeyDown={onKeyDown}
             className="border border-blue-300 rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-300"
           />
         ) : (
-          <button className="text-gray-800 text-left" onDoubleClick={()=>setEditing(true)} onClick={()=>setEditing(true)}>{node.title}</button>
+          <button className="text-gray-800 text-left" onDoubleClick={()=>setEditing(true)} onClick={()=>setEditing(true)}>{node.title || 'Senza titolo'}</button>
         )}
         <div className="ml-auto flex gap-2">
           <button onClick={()=>onAdd(path, 'item')} className="text-blue-600 underline">+ elemento</button>
@@ -39,7 +59,7 @@ function Node({ node, path, onAdd, onUpdate, onDelete }) {
       {isFolder && open && node.children && (
         <div className="space-y-1">
           {node.children.map((child, idx)=> (
-            <Node key={child.id} node={child} path={[...path, idx]} onAdd={onAdd} onUpdate={onUpdate} onDelete={onDelete} />
+            <Node key={child.id || idx} node={child} path={[...path, idx]} onAdd={onAdd} onUpdate={onUpdate} onDelete={onDelete} />
           ))}
         </div>
       )}
@@ -54,20 +74,23 @@ export default function Checklist({ property }) {
   const load = async () => {
     const res = await fetch(`${API}/api/properties/${property.id}/checklist`)
     const data = await res.json()
-    setList(data)
+    setList(Array.isArray(data) ? data : [])
   }
 
   useEffect(()=>{ load() }, [property.id])
 
   const addAt = async (path, kind) => {
-    setLoading(true)
-    await fetch(`${API}/api/properties/${property.id}/checklist`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ title: kind === 'folder' ? 'Nuova cartella' : 'Nuovo elemento', kind, parent_path: path })
-    })
-    setLoading(false)
-    load()
+    try {
+      setLoading(true)
+      await fetch(`${API}/api/properties/${property.id}/checklist`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title: kind === 'folder' ? 'Nuova cartella' : 'Nuovo elemento', kind, parent_path: path })
+      })
+    } finally {
+      setLoading(false)
+      await load()
+    }
   }
 
   const updateAt = async (path, payload) => {
@@ -76,14 +99,14 @@ export default function Checklist({ property }) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
     })
-    load()
+    await load()
   }
 
   const deleteAt = async (path) => {
     await fetch(`${API}/api/properties/${property.id}/checklist?` + new URLSearchParams({ path: path.join(',') }), {
       method: 'DELETE'
     })
-    load()
+    await load()
   }
 
   const addRoot = async (kind)=> addAt([], kind)
@@ -103,7 +126,7 @@ export default function Checklist({ property }) {
           <p className="text-gray-500">Nessuna voce ancora. Usa "+" per aggiungere.</p>
         )}
         {list.map((n, idx)=> (
-          <Node key={n.id} node={n} path={[idx]} onAdd={addAt} onUpdate={updateAt} onDelete={deleteAt} />
+          <Node key={n.id || idx} node={n} path={[idx]} onAdd={addAt} onUpdate={updateAt} onDelete={deleteAt} />
         ))}
       </div>
     </div>
