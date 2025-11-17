@@ -8,7 +8,7 @@ export default function PropertyList({ onOpen }) {
   const [photoUrl, setPhotoUrl] = useState('')
   const [loading, setLoading] = useState(false)
   const [dragOver, setDragOver] = useState(false)
-  const inputRef = useRef(null)
+  const fileRef = useRef(null)
 
   const load = async () => {
     const res = await fetch(`${API}/api/properties`)
@@ -19,7 +19,7 @@ export default function PropertyList({ onOpen }) {
   useEffect(() => { load() }, [])
 
   const handleImageFile = (file) => {
-    if (!file || !file.type.startsWith('image/')) return
+    if (!file || !file.type?.startsWith('image/')) return
     const reader = new FileReader()
     reader.onload = () => {
       setPhotoUrl(reader.result)
@@ -27,10 +27,10 @@ export default function PropertyList({ onOpen }) {
     reader.readAsDataURL(file)
   }
 
-  const onPaste = async (e) => {
+  const onPaste = (e) => {
     const items = e.clipboardData?.items || []
     for (const item of items) {
-      if (item.type.startsWith('image/')) {
+      if (item.type?.startsWith('image/')) {
         const file = item.getAsFile()
         handleImageFile(file)
         e.preventDefault()
@@ -61,7 +61,7 @@ export default function PropertyList({ onOpen }) {
     await fetch(`${API}/api/properties`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, photo_url: photoUrl || null })
+      body: JSON.stringify({ name: name.trim(), photo_url: photoUrl || null })
     })
     setName('')
     setPhotoUrl('')
@@ -72,38 +72,47 @@ export default function PropertyList({ onOpen }) {
   return (
     <div className="space-y-6">
       <form onSubmit={addProperty} className="space-y-3">
-        <label className="block text-sm text-blue-600">Nome Casa (incolla o trascina una foto qui dentro)</label>
+        <label className="block text-sm text-blue-600">Nome Casa + Foto</label>
         <div
-          className={
-            `flex items-center gap-3 border rounded px-3 py-2 transition-colors ${dragOver ? 'border-blue-500 bg-blue-50' : 'border-blue-300'}`
-          }
+          className={`flex items-center gap-3 border rounded px-3 py-2 transition-colors ${dragOver ? 'border-blue-500 bg-blue-50' : 'border-blue-300'}`}
           onDrop={onDrop}
           onDragOver={onDragOver}
           onDragLeave={onDragLeave}
+          onPaste={onPaste}
         >
-          {photoUrl ? (
-            <div className="relative">
-              <img src={photoUrl} alt="preview" className="w-12 h-12 object-cover rounded" />
-              <button
-                type="button"
-                onClick={() => setPhotoUrl('')}
-                className="absolute -top-2 -right-2 bg-white border border-blue-300 text-blue-600 rounded-full w-6 h-6 text-xs"
-                aria-label="Rimuovi foto"
-              >×</button>
-            </div>
-          ) : (
-            <div className="w-12 h-12 rounded border border-dashed border-blue-300 flex items-center justify-center text-blue-400 text-xs">
-              Foto
-            </div>
-          )}
+          <button
+            type="button"
+            onClick={() => fileRef.current?.click()}
+            className={`relative w-12 h-12 rounded border ${photoUrl ? 'border-transparent' : 'border-dashed border-blue-300'} flex items-center justify-center text-blue-500 text-xs shrink-0 overflow-hidden bg-white`}
+            aria-label="Seleziona foto"
+            title="Clicca per scegliere una foto, oppure trascina/incolla"
+          >
+            {photoUrl ? (
+              <img src={photoUrl} alt="preview" className="absolute inset-0 w-full h-full object-cover" />
+            ) : (
+              <>Foto</>
+            )}
+          </button>
           <input
-            ref={inputRef}
             value={name}
             onChange={(e)=>setName(e.target.value)}
-            onPaste={onPaste}
             placeholder="Es. Casa Mare Blu"
-            className="flex-1 outline-none"
+            className="flex-1 bg-white border border-blue-200 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-300"
           />
+          <input
+            ref={fileRef}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={(e)=>handleImageFile(e.target.files?.[0])}
+          />
+          {photoUrl && (
+            <button
+              type="button"
+              onClick={() => setPhotoUrl('')}
+              className="text-blue-600 border border-blue-300 rounded px-2 py-1"
+            >Rimuovi foto</button>
+          )}
           <button
             type="submit"
             disabled={loading}
@@ -112,19 +121,19 @@ export default function PropertyList({ onOpen }) {
             + Aggiungi
           </button>
         </div>
-        <p className="text-xs text-blue-400">Suggerimento: puoi incollare una foto direttamente qui (Cmd/Ctrl+V) o trascinarla sopra il campo.</p>
+        <p className="text-xs text-blue-500">Suggerimento: incolla un'immagine (Cmd/Ctrl+V) o trascinala sul riquadro; clicca su "Foto" per scegliere da file.</p>
       </form>
 
-      <div className="space-y-4">
+      <div className="grid sm:grid-cols-2 gap-4">
         {properties.map((p)=> (
-          <div key={p.id} onClick={()=>onOpen(p)} className="cursor-pointer border border-blue-200 rounded-lg p-4 hover:shadow-sm">
-            <h3 className="text-xl font-semibold text-blue-600 mb-2">{p.name}</h3>
+          <button key={p.id} onClick={()=>onOpen(p)} className="text-left border border-blue-200 rounded-lg p-3 hover:shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-300">
             {p.photo_url ? (
-              <img src={p.photo_url} alt={p.name} className="w-full h-56 object-cover rounded" />
+              <img src={p.photo_url} alt={p.name} className="w-full h-40 object-cover rounded" />
             ) : (
-              <div className="w-full h-56 bg-blue-50 border border-dashed border-blue-200 rounded flex items-center justify-center text-blue-400">Nessuna foto</div>
+              <div className="w-full h-40 bg-blue-50 border border-dashed border-blue-200 rounded flex items-center justify-center text-blue-400">Nessuna foto</div>
             )}
-          </div>
+            <h3 className="mt-2 text-lg font-semibold text-blue-700 line-clamp-1">{p.name}</h3>
+          </button>
         ))}
       </div>
     </div>

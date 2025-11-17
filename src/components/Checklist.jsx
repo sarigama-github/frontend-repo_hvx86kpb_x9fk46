@@ -17,17 +17,23 @@ function Node({ node, path, onAdd, onUpdate, onDelete }) {
     <div className="pl-4 border-l border-blue-100">
       <div className="flex items-center gap-2 py-1">
         {isFolder && (
-          <button onClick={()=>setOpen(!open)} className="text-blue-600 px-2">{open ? '-' : '+'}</button>
+          <button onClick={()=>setOpen(!open)} className="text-blue-600 px-2" aria-label={open ? 'Chiudi' : 'Apri'}>{open ? '-' : '+'}</button>
         )}
         {editing ? (
-          <input value={title} onChange={(e)=>setTitle(e.target.value)} onBlur={save} className="border border-blue-300 rounded px-2 py-1" />
+          <input
+            autoFocus
+            value={title}
+            onChange={(e)=>setTitle(e.target.value)}
+            onBlur={save}
+            className="border border-blue-300 rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-300"
+          />
         ) : (
-          <span className="text-gray-800" onDoubleClick={()=>setEditing(true)}>{node.title}</span>
+          <button className="text-gray-800 text-left" onDoubleClick={()=>setEditing(true)} onClick={()=>setEditing(true)}>{node.title}</button>
         )}
         <div className="ml-auto flex gap-2">
-          <button onClick={()=>onAdd(path, 'item')} className="text-blue-600">+ item</button>
-          <button onClick={()=>onAdd(path, 'folder')} className="text-blue-600">+ cartella</button>
-          <button onClick={()=>onDelete(path)} className="text-red-500">canc</button>
+          <button onClick={()=>onAdd(path, 'item')} className="text-blue-600 underline">+ elemento</button>
+          <button onClick={()=>onAdd(path, 'folder')} className="text-blue-600 underline">+ cartella</button>
+          <button onClick={()=>onDelete(path)} className="text-red-500 underline">canc</button>
         </div>
       </div>
       {isFolder && open && node.children && (
@@ -80,7 +86,6 @@ export default function Checklist({ property }) {
     load()
   }
 
-  // Root level controls
   const addRoot = async (kind)=> addAt([], kind)
 
   return (
