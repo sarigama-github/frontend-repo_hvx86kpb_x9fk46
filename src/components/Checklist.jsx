@@ -38,7 +38,7 @@ function Row({ node, indexPath, onUpdate, onDelete }) {
           autoFocus
           value={title}
           onChange={(e)=>setTitle(e.target.value)}
-          onBlur={save}
+          onBlur={() => { void save() }}
           onKeyDown={onKeyDown}
           className="border border-blue-300 rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-300 w-full"
         />
@@ -56,12 +56,12 @@ export default function Checklist({ property }) {
   const [list, setList] = useState([])
   const [loading, setLoading] = useState(false)
 
+  const toFlat = (data) => Array.isArray(data) ? data.map(n => ({ id: n.id, title: n.title || '', kind: 'item' })) : []
+
   const load = async () => {
     const res = await fetch(`${API}/api/properties/${property.id}/checklist`)
     const data = await res.json()
-    // Mantiene solo elementi piatti: se arrivano cartelle, le tratto come righe con il loro titolo ignorando i figli
-    const flat = Array.isArray(data) ? data.map(n => ({ id: n.id, title: n.title || '', kind: 'item' })) : []
-    setList(flat)
+    setList(toFlat(data))
   }
 
   useEffect(()=>{ load() }, [property.id])
@@ -69,31 +69,37 @@ export default function Checklist({ property }) {
   const addRootItem = async () => {
     try {
       setLoading(true)
-      await fetch(`${API}/api/properties/${property.id}/checklist`, {
+      const res = await fetch(`${API}/api/properties/${property.id}/checklist`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ title: 'Nuovo elemento', kind: 'item', parent_path: [] })
       })
+      const data = await res.json()
+      if (data && data.checklist) setList(toFlat(data.checklist))
+      else await load()
     } finally {
       setLoading(false)
-      await load()
     }
   }
 
   const updateAt = async (path, payload) => {
-    await fetch(`${API}/api/properties/${property.id}/checklist?` + new URLSearchParams({ path: path.join(',') }), {
+    const res = await fetch(`${API}/api/properties/${property.id}/checklist?` + new URLSearchParams({ path: path.join(',') }), {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
     })
-    await load()
+    const data = await res.json()
+    if (data && data.checklist) setList(toFlat(data.checklist))
+    else await load()
   }
 
   const deleteAt = async (path) => {
-    await fetch(`${API}/api/properties/${property.id}/checklist?` + new URLSearchParams({ path: path.join(',') }), {
+    const res = await fetch(`${API}/api/properties/${property.id}/checklist?` + new URLSearchParams({ path: path.join(',') }), {
       method: 'DELETE'
     })
-    await load()
+    const data = await res.json()
+    if (data && data.checklist) setList(toFlat(data.checklist))
+    else await load()
   }
 
   return (
