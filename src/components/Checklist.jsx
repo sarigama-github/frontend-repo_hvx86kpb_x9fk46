@@ -2,21 +2,19 @@ import { useEffect, useState } from 'react'
 
 const API = import.meta.env.VITE_BACKEND_URL || 'http://localhost:8000'
 
-function Node({ node, path, onAdd, onUpdate, onDelete }) {
-  const isFolder = node.kind === 'folder'
-  const [open, setOpen] = useState(true)
+// Versione solo-elementi: nessuna cartella, lista piatta
+function Row({ node, indexPath, onUpdate, onDelete }) {
   const [editing, setEditing] = useState(false)
   const [title, setTitle] = useState(node.title || '')
 
   useEffect(() => {
-    // Keep local title in sync when node changes from server
     setTitle(node.title || '')
   }, [node.title])
 
   const save = async () => {
-    const next = title?.trim() ?? ''
+    const next = (title || '').trim()
     if (next !== (node.title || '')) {
-      await onUpdate(path, { title: next })
+      await onUpdate(indexPath, { title: next })
     }
     setEditing(false)
   }
@@ -25,7 +23,8 @@ function Node({ node, path, onAdd, onUpdate, onDelete }) {
     if (e.key === 'Enter') {
       e.preventDefault()
       await save()
-    } else if (e.key === 'Escape') {
+    }
+    if (e.key === 'Escape') {
       e.preventDefault()
       setTitle(node.title || '')
       setEditing(false)
@@ -33,36 +32,22 @@ function Node({ node, path, onAdd, onUpdate, onDelete }) {
   }
 
   return (
-    <div className="pl-4 border-l border-blue-100">
-      <div className="flex items-center gap-2 py-1">
-        {isFolder && (
-          <button onClick={()=>setOpen(!open)} className="text-blue-600 px-2" aria-label={open ? 'Chiudi' : 'Apri'}>{open ? '-' : '+'}</button>
-        )}
-        {editing ? (
-          <input
-            autoFocus
-            value={title}
-            onChange={(e)=>setTitle(e.target.value)}
-            onBlur={save}
-            onKeyDown={onKeyDown}
-            className="border border-blue-300 rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-300"
-          />
-        ) : (
-          <button className="text-gray-800 text-left" onDoubleClick={()=>setEditing(true)} onClick={()=>setEditing(true)}>{node.title || 'Senza titolo'}</button>
-        )}
-        <div className="ml-auto flex gap-2">
-          <button onClick={()=>onAdd(path, 'item')} className="text-blue-600 underline">+ elemento</button>
-          <button onClick={()=>onAdd(path, 'folder')} className="text-blue-600 underline">+ cartella</button>
-          <button onClick={()=>onDelete(path)} className="text-red-500 underline">canc</button>
-        </div>
-      </div>
-      {isFolder && open && node.children && (
-        <div className="space-y-1">
-          {node.children.map((child, idx)=> (
-            <Node key={child.id || idx} node={child} path={[...path, idx]} onAdd={onAdd} onUpdate={onUpdate} onDelete={onDelete} />
-          ))}
-        </div>
+    <div className="flex items-center gap-2 py-1">
+      {editing ? (
+        <input
+          autoFocus
+          value={title}
+          onChange={(e)=>setTitle(e.target.value)}
+          onBlur={save}
+          onKeyDown={onKeyDown}
+          className="border border-blue-300 rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-300 w-full"
+        />
+      ) : (
+        <button className="text-gray-800 text-left w-full" onDoubleClick={()=>setEditing(true)} onClick={()=>setEditing(true)}>
+          {node.title || 'Senza titolo'}
+        </button>
       )}
+      <button onClick={()=>onDelete(indexPath)} className="text-red-500 underline shrink-0">canc</button>
     </div>
   )
 }
@@ -74,18 +59,20 @@ export default function Checklist({ property }) {
   const load = async () => {
     const res = await fetch(`${API}/api/properties/${property.id}/checklist`)
     const data = await res.json()
-    setList(Array.isArray(data) ? data : [])
+    // Mantiene solo elementi piatti: se arrivano cartelle, le tratto come righe con il loro titolo ignorando i figli
+    const flat = Array.isArray(data) ? data.map(n => ({ id: n.id, title: n.title || '', kind: 'item' })) : []
+    setList(flat)
   }
 
   useEffect(()=>{ load() }, [property.id])
 
-  const addAt = async (path, kind) => {
+  const addRootItem = async () => {
     try {
       setLoading(true)
       await fetch(`${API}/api/properties/${property.id}/checklist`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title: kind === 'folder' ? 'Nuova cartella' : 'Nuovo elemento', kind, parent_path: path })
+        body: JSON.stringify({ title: 'Nuovo elemento', kind: 'item', parent_path: [] })
       })
     } finally {
       setLoading(false)
@@ -109,15 +96,12 @@ export default function Checklist({ property }) {
     await load()
   }
 
-  const addRoot = async (kind)=> addAt([], kind)
-
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h3 className="text-xl font-semibold text-blue-600">Checklist</h3>
         <div className="flex gap-3">
-          <button onClick={()=>addRoot('item')} className="bg-blue-500 text-white px-3 py-1 rounded">+ elemento</button>
-          <button onClick={()=>addRoot('folder')} className="bg-blue-500 text-white px-3 py-1 rounded">+ cartella</button>
+          <button onClick={addRootItem} disabled={loading} className="bg-blue-500 text-white px-3 py-1 rounded">+ elemento</button>
         </div>
       </div>
 
@@ -126,7 +110,7 @@ export default function Checklist({ property }) {
           <p className="text-gray-500">Nessuna voce ancora. Usa "+" per aggiungere.</p>
         )}
         {list.map((n, idx)=> (
-          <Node key={n.id || idx} node={n} path={[idx]} onAdd={addAt} onUpdate={updateAt} onDelete={deleteAt} />
+          <Row key={n.id || idx} node={n} indexPath={[idx]} onUpdate={updateAt} onDelete={deleteAt} />
         ))}
       </div>
     </div>
